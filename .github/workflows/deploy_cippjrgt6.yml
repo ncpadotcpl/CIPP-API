@@ -1,0 +1,43 @@
+# Deploys this fork to the self-hosted CIPP backend Function App (cippjrgt6).
+# Mirrors upstream's dev_api.yml pattern: checkout -> build modules -> functions-action.
+# Auth: publish profile stored as repo secret AZUREAPPSERVICE_PUBLISHPROFILE_CIPPJRGT6.
+
+name: Deploy API to Azure Function App - cippjrgt6
+
+on:
+  push:
+    branches:
+      - master
+  workflow_dispatch:
+
+env:
+  AZURE_FUNCTIONAPP_PACKAGE_PATH: '.'
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 'Checkout GitHub Action'
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Create version.json
+        run: |
+          VERSION=$(cat version_latest.txt | tr -d '[:space:]')
+          SHORT_SHA="${GITHUB_SHA::7}"
+          echo "{\"version\": \"${VERSION}\", \"commit\": \"${SHORT_SHA}\"}" > version.json
+
+      - name: Build and stage modules
+        shell: pwsh
+        run: ./Tools/Build-DevApiModules.ps1
+
+      - name: 'Run Azure Functions Action'
+        uses: Azure/functions-action@v1
+        id: fa
+        with:
+          app-name: 'cippjrgt6'
+          slot-name: 'Production'
+          package: ${{ env.AZURE_FUNCTIONAPP_PACKAGE_PATH }}
+          publish-profile: ${{ secrets.AZUREAPPSERVICE_PUBLISHPROFILE_CIPPJRGT6 }}
